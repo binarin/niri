@@ -1695,6 +1695,36 @@ impl<W: LayoutElement> Layout<W> {
         }
     }
 
+    /// Like `with_windows` but passes `on_screen_fraction` for each window.
+    pub fn with_windows_with_fractions(
+        &self,
+        mut f: impl FnMut(&W, Option<&Output>, Option<WorkspaceId>, WindowLayout, u8),
+    ) {
+        if let Some(InteractiveMoveState::Moving(move_)) = &self.interactive_move {
+            let layout = move_.tile.ipc_layout_template();
+            f(move_.tile.window(), Some(&move_.output), None, layout, 0);
+        }
+
+        match &self.monitor_set {
+            MonitorSet::Normal { monitors, .. } => {
+                for mon in monitors {
+                    for ws in &mon.workspaces {
+                        for (tile, layout, fraction) in ws.tiles_with_ipc_layouts_and_fractions() {
+                            f(tile.window(), Some(&mon.output), Some(ws.id()), layout, fraction);
+                        }
+                    }
+                }
+            }
+            MonitorSet::NoOutputs { workspaces } => {
+                for ws in workspaces {
+                    for (tile, layout, fraction) in ws.tiles_with_ipc_layouts_and_fractions() {
+                        f(tile.window(), None, Some(ws.id()), layout, fraction);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn with_windows_mut(&mut self, mut f: impl FnMut(&mut W, Option<&Output>)) {
         if let Some(InteractiveMoveState::Moving(move_)) = &mut self.interactive_move {
             f(move_.tile.window_mut(), Some(&move_.output));

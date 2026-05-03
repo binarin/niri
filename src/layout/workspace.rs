@@ -1609,6 +1609,19 @@ impl<W: LayoutElement> Workspace<W> {
         floating.chain(scrolling)
     }
 
+    /// Iterates all tiles with their IPC layout and on-screen fraction.
+    pub fn tiles_with_ipc_layouts_and_fractions(
+        &self,
+    ) -> impl Iterator<Item = (&Tile<W>, WindowLayout, u8)> {
+        let view_size = self.scrolling.view_size();
+        let view_x = self.scrolling.view_pos_or_zero();
+        let view_rect = Rectangle::new(Point::from((view_x, 0.0)), view_size);
+
+        let scrolling = self.scrolling.tiles_with_ipc_layouts_and_fractions();
+        let floating = self.floating.tiles_with_ipc_layouts_and_fractions(view_rect);
+        floating.chain(scrolling)
+    }
+
     pub fn active_window_visual_rectangle(&self) -> Option<Rectangle<f64, Logical>> {
         if self.floating_is_active.get() {
             self.floating.active_window_visual_rectangle()

@@ -231,6 +231,13 @@ impl EventStreamStatePart for WindowsState {
                     win.layout = update;
                 }
             }
+            Event::WindowsOnScreenChanged { changes } => {
+                for change in changes {
+                    if let Some(win) = self.windows.get_mut(&change.window_id) {
+                        win.on_screen_fraction = change.visible_percentage;
+                    }
+                }
+            }
             event => return Some(event),
         }
         None

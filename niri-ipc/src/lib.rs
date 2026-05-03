@@ -1326,6 +1326,14 @@ pub struct Window {
     pub is_urgent: bool,
     /// Position- and size-related properties of the window.
     pub layout: WindowLayout,
+    /// Fraction of the window's tile that is within the monitor viewport.
+    ///
+    /// 0 = fully off-screen, 100 = fully on-screen.
+    ///
+    /// For tiled windows this is the horizontal overlap fraction. For
+    /// floating windows this is a boolean: 100 if any part of the tile
+    /// intersects the viewport, 0 otherwise.
+    pub on_screen_fraction: u8,
     /// Timestamp when the window was most recently focused.
     ///
     /// This timestamp is intended for most-recently-used window switchers, i.e. Alt-Tab. It only
@@ -1705,6 +1713,25 @@ pub enum Event {
         /// Stream ID of the stopped screencast.
         stream_id: u64,
     },
+    /// On-screen fraction changed for one or more windows.
+    ///
+    /// Fires when the viewport scrolls or when windows move, causing
+    /// their visible fraction to change. Unlike window-open/change
+    /// events, this one fires specifically for visibility transitions.
+    WindowsOnScreenChanged {
+        /// The windows whose on-screen fraction changed.
+        changes: Vec<WindowOnScreenChange>,
+    },
+}
+
+/// Change in a window's visible on-screen fraction.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct WindowOnScreenChange {
+    /// Id of the window.
+    pub window_id: u64,
+    /// Fraction of the window's tile that is within the monitor viewport (0–100).
+    pub visible_percentage: u8,
 }
 
 impl From<Duration> for Timestamp {

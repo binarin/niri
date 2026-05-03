@@ -18,7 +18,7 @@ use niri_config::OutputName;
 use niri_ipc::state::{EventStreamState, EventStreamStatePart as _};
 use niri_ipc::{
     Action, Event, KeyboardLayouts, OutputConfigChanged, Overview, Reply, Request, Response,
-    Timestamp, WindowLayout, Workspace,
+    Timestamp, WindowLayout, WindowOnScreenChange, Workspace,
 };
 use smithay::desktop::layer_map_for_output;
 use smithay::input::pointer::{
@@ -516,6 +516,7 @@ fn make_ipc_window(
     mapped: &Mapped,
     workspace_id: Option<WorkspaceId>,
     layout: WindowLayout,
+    on_screen_fraction: u8,
 ) -> niri_ipc::Window {
     with_toplevel_role(mapped.toplevel(), |role| niri_ipc::Window {
         id: mapped.id().get(),
@@ -528,6 +529,7 @@ fn make_ipc_window(
         is_urgent: mapped.is_urgent(),
         layout,
         focus_timestamp: mapped.get_focus_timestamp().map(Timestamp::from),
+        on_screen_fraction,
     })
 }
 
@@ -700,20 +702,26 @@ impl State {
 
         let mut batch_change_layouts: Vec<(u64, WindowLayout)> = Vec::new();
 
+        // Collect current fractions for all windows.
+        let mut current_fractions: std::collections::HashMap<u64, u8> = std::collections::HashMap::new();
+        let mut changed_in_this_cycle: HashSet<u64> = HashSet::new();
+
         // Check for window changes.
         let mut seen = HashSet::new();
         let mut focused_id = None;
-        layout.with_windows(|mapped, _, ws_id, window_layout| {
+        layout.with_windows_with_fractions(|mapped, _, ws_id, window_layout, on_screen_fraction| {
             let id = mapped.id().get();
             seen.insert(id);
+            current_fractions.insert(id, on_screen_fraction);
 
             if mapped.is_focused() {
                 focused_id = Some(id);
             }
 
             let Some(ipc_win) = state.windows.get(&id) else {
-                let window = make_ipc_window(mapped, ws_id, window_layout);
+                let window = make_ipc_window(mapped, ws_id, window_layout, on_screen_fraction);
                 events.push(Event::WindowOpenedOrChanged { window });
+                changed_in_this_cycle.insert(id);
                 return;
             };
 
@@ -726,8 +734,9 @@ impl State {
             });
 
             if changed {
-                let window = make_ipc_window(mapped, ws_id, window_layout);
+                let window = make_ipc_window(mapped, ws_id, window_layout, on_screen_fraction);
                 events.push(Event::WindowOpenedOrChanged { window });
+                changed_in_this_cycle.insert(id);
                 return;
             }
 
@@ -780,6 +789,28 @@ impl State {
         // a different window.
         if focused_id.is_none() && ipc_focused_id.is_some() {
             events.push(Event::WindowFocusChanged { id: None });
+        }
+
+        // Check for on-screen fraction changes (scroll-driven, not alongside opened/changed).
+        let screen_changes: Vec<_> = current_fractions
+            .iter()
+            .filter(|(id, &fraction)| {
+                !changed_in_this_cycle.contains(id)
+                    && state
+                        .windows
+                        .get(id)
+                        .map_or(false, |w| w.on_screen_fraction != fraction)
+            })
+            .map(|(id, &fraction)| WindowOnScreenChange {
+                window_id: *id,
+                visible_percentage: fraction,
+            })
+            .collect();
+
+        if !screen_changes.is_empty() {
+            events.push(Event::WindowsOnScreenChanged {
+                changes: screen_changes,
+            });
         }
 
         for event in events {

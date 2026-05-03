@@ -2295,6 +2295,13 @@ impl<W: LayoutElement> ScrollingSpace<W> {
         self.column_x(self.active_column_idx) + self.view_offset.current()
     }
 
+    pub(super) fn view_pos_or_zero(&self) -> f64 {
+        if self.columns.is_empty() {
+            return 0.;
+        }
+        self.view_pos()
+    }
+
     pub fn target_view_pos(&self) -> f64 {
         self.column_x(self.active_column_idx) + self.view_offset.target()
     }
@@ -2431,6 +2438,45 @@ impl<W: LayoutElement> ScrollingSpace<W> {
                     (tile, layout)
                 })
             })
+    }
+
+    /// Like `tiles_with_ipc_layouts` but also returns `on_screen_fraction` for each tile.
+    pub fn tiles_with_ipc_layouts_and_fractions(
+        &self,
+    ) -> impl Iterator<Item = (&Tile<W>, WindowLayout, u8)> {
+        self.columns.iter().enumerate().flat_map(move |(col_idx, col)| {
+            let fraction = self.column_on_screen_fraction(col_idx);
+            col.tiles().enumerate().map(move |(tile_idx, (tile, _))| {
+                let layout = WindowLayout {
+                    pos_in_scrolling_layout: Some((col_idx + 1, tile_idx + 1)),
+                    ..tile.ipc_layout_template()
+                };
+                (tile, layout, fraction)
+            })
+        })
+    }
+
+    /// Returns what fraction (0–100) of the column at `col_idx` is within the viewport.
+    ///
+    /// Reuses the same overlap math as `compute_new_view_offset`.
+    pub fn column_on_screen_fraction(&self, col_idx: usize) -> u8 {
+        if self.columns.is_empty() {
+            return 0;
+        }
+        let col_x = self.column_x(col_idx);
+        let col_w = self.data[col_idx].width;
+        let view_x = self.view_pos();
+        let view_w = self.view_size.w;
+
+        if col_w <= 0.0 || view_w <= 0.0 {
+            return 0;
+        }
+
+        let visible_start = col_x.max(view_x);
+        let visible_end = (col_x + col_w).min(view_x + view_w);
+        let visible = (visible_end - visible_start).max(0.0);
+
+        ((visible / col_w) * 100.0).round().clamp(0.0, 100.0) as u8
     }
 
     pub(super) fn insert_hint_area(
@@ -3713,7 +3759,6 @@ impl<W: LayoutElement> ScrollingSpace<W> {
         }
     }
 
-    #[cfg(test)]
     pub fn view_size(&self) -> Size<f64, Logical> {
         self.view_size
     }

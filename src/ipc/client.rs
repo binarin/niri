@@ -471,6 +471,14 @@ pub fn handle_msg(mut msg: Msg, json: bool) -> anyhow::Result<()> {
                     Event::WindowLayoutsChanged { changes } => {
                         println!("Window layouts changed: {changes:?}");
                     }
+                    Event::WindowsOnScreenChanged { changes } => {
+                        for change in &changes {
+                            println!(
+                                "Window {}: on-screen fraction changed to {}%",
+                                change.window_id, change.visible_percentage
+                            );
+                        }
+                    }
                     Event::KeyboardLayoutsChanged { keyboard_layouts } => {
                         println!("Keyboard layouts changed: {keyboard_layouts:?}");
                     }

@@ -340,6 +340,27 @@ impl<W: LayoutElement> FloatingSpace<W> {
         })
     }
 
+    /// Like `tiles_with_ipc_layouts` but also returns `on_screen_fraction`.
+    ///
+    /// For floating windows the fraction is 100 if any part of the tile
+    /// intersects the viewport, 0 otherwise.
+    pub fn tiles_with_ipc_layouts_and_fractions(
+        &self,
+        view_rect: Rectangle<f64, Logical>,
+    ) -> impl Iterator<Item = (&Tile<W>, WindowLayout, u8)> {
+        let scale = self.scale;
+        self.tiles_with_offsets().map(move |(tile, offset)| {
+            let pos = offset.to_physical_precise_round(scale).to_logical(scale);
+            let layout = WindowLayout {
+                tile_pos_in_workspace_view: Some(pos.into()),
+                ..tile.ipc_layout_template()
+            };
+            let tile_rect = Rectangle::new(offset, tile.tile_size());
+            let fraction = if tile_rect.overlaps(view_rect) { 100 } else { 0 };
+            (tile, layout, fraction)
+        })
+    }
+
     pub fn new_window_toplevel_bounds(&self, rules: &ResolvedWindowRules) -> Size<i32, Logical> {
         let border_config = self.options.layout.border.merged_with(&rules.border);
         compute_toplevel_bounds(border_config, self.working_area.size)
