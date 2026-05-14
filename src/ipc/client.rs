@@ -708,6 +708,7 @@ fn print_window(window: &Window) {
         tile_size,
         window_size,
         tile_pos_in_workspace_view,
+        is_visible_in_column: _,
         window_offset_in_tile,
     } = window.layout;
 

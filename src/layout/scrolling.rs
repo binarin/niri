@@ -2418,14 +2418,38 @@ impl<W: LayoutElement> ScrollingSpace<W> {
     }
 
     pub fn tiles_with_ipc_layouts(&self) -> impl Iterator<Item = (&Tile<W>, WindowLayout)> {
+        let scale = self.scale;
+        let view_off = Point::from((-self.view_pos(), 0.));
+        let col_xs = self.column_xs(self.data.iter().copied());
         self.columns
             .iter()
+            .zip(col_xs)
             .enumerate()
-            .flat_map(move |(col_idx, col)| {
-                col.tiles().enumerate().map(move |(tile_idx, (tile, _))| {
+            .flat_map(move |(col_idx, (col, col_x))| {
+                let col_off = Point::from((col_x, 0.));
+                let col_render_off = col.render_offset();
+                let is_tabbed = col.display_mode == ColumnDisplay::Tabbed;
+                let active_idx = col.active_tile_idx;
+                col.tiles().enumerate().map(move |(tile_idx, (tile, tile_off))| {
+                    // Compute the tile position in workspace view coordinates.
+                    // This mirrors tiles_with_render_positions() but uses
+                    // column-index iteration order rather than render order.
+                    let pos = view_off
+                        + col_off
+                        + col_render_off
+                        + tile_off
+                        + tile.render_offset();
+                    // Round to physical pixels, matching the floating layout.
+                    let pos = pos.to_physical_precise_round(scale).to_logical(scale);
+
+                    // In tabbed columns, only the active tile is visible.
+                    let is_visible = !is_tabbed || tile_idx == active_idx;
+
                     let layout = WindowLayout {
                         // Our indices are 1-based, consistent with the actions.
                         pos_in_scrolling_layout: Some((col_idx + 1, tile_idx + 1)),
+                        tile_pos_in_workspace_view: Some((pos.x, pos.y)),
+                        is_visible_in_column: is_visible,
                         ..tile.ipc_layout_template()
                     };
                     (tile, layout)

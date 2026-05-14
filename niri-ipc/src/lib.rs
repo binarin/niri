@@ -1384,6 +1384,15 @@ pub struct WindowLayout {
     ///
     /// This is the same "workspace view" as in gradients' `relative-to` in the niri config.
     pub tile_pos_in_workspace_view: Option<(f64, f64)>,
+    /// Whether the window is currently visible in its column.
+    ///
+    /// For columns in [`ColumnDisplay::Tabbed`] mode, only the active tile is visible;
+    /// all other tiles in the column are hidden. In [`ColumnDisplay::Normal`] mode,
+    /// all tiles in the column are visible.
+    ///
+    /// This field is `false` when the window is in a tabbed column and is not the
+    /// active (focused) tile. It is `true` in all other cases.
+    pub is_visible_in_column: bool,
     /// Location of the window's visual geometry within its tile.
     ///
     /// This includes things like border sizes. For fullscreened fixed-size windows this includes
